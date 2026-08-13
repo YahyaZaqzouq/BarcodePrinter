@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>مولد بطاقات التسعير - صيدلية معاذ</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700;800&family=Cairo:wght@400;600;700;800&family=Almarai:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --tag-w: 70mm;
+    --tag-h: 35mm;
+    --gap: 3mm;
+
+    /* palette — plain, minimal, matches reference tool */
+    --bg:#EEF2F7;
+    --surface:#FFFFFF;
+    --ink:#16324F;
+    --ink-soft:#64748B;
+    --navy:#16324F;
+    --navy-dark:#0F2438;
+    --border-dash:#D7DEE7;
+    --pill-bg:#EEF1F5;
+    --pill-text:#6B7280;
+    --danger:#C0392B;
+    --font:"Tajawal","Tahoma",sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family: var(--font);
+    background:var(--bg);
+    margin:0;
+    padding:0;
+    direction:rtl;
+    color:var(--ink);
+  }
+
+  .masthead{
+    text-align:center;
+    padding:34px 20px 8px 20px;
+  }
+  .masthead h1{
+    font-weight:800;
+    font-size:22px;
+    margin:0 0 8px 0;
+    color:var(--ink);
+  }
+  .masthead .sub{
+    font-size:13.5px;
+    color:var(--ink-soft);
+    margin:0 auto 10px auto;
+    max-width:620px;
+    line-height:1.7;
+  }
+  .masthead .attribution{
+    font-size:12.5px;
+    color:#8B95A3;
+    margin:0 0 26px 0;
+  }
+
+  .wrap{
+    max-width:900px;
+    margin:0 auto;
+    padding:0 20px 48px 20px;
+  }
+
+  .panel{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+  }
+  @media (max-width:600px){
+    .panel{grid-template-columns:1fr;}
+  }
+
+  .card{
+    background:var(--surface);
+    border:1.5px dashed var(--border-dash);
+    border-radius:14px;
+    padding:22px 24px;
+    box-shadow:0 1px 3px rgba(22,50,79,.04);
+  }
+  .card-head{
+    text-align:center;
+    margin-bottom:16px;
+  }
+  .card-icon{font-size:26px; line-height:1; margin-bottom:8px;}
+  .card-title{font-weight:700; font-size:15px; color:var(--ink); margin:0 0 3px 0;}
+  .card-desc{font-size:12.5px; color:var(--ink-soft); margin:0;}
+  .card-desc b{color:var(--ink); font-weight:700;}
+
+  .row{
+    display:flex;
+    flex-wrap:wrap;
+    gap:16px;
+    align-items:flex-end;
+    justify-content:center;
+  }
+  .field{display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--ink-soft);align-items:flex-start;}
+  .field span{font-weight:600;color:var(--ink);font-size:12.5px;}
+  .field input[type=number], .field input[type=text], .field select{
+    padding:8px 10px;border:1px solid var(--border-dash);border-radius:8px;width:96px;
+    font-size:13.5px;color:var(--ink);background:#FAFBFC;
+  }
+  .field input[type=number]:focus, .field input[type=text]:focus, .field select:focus{
+    outline:none; border-color:var(--navy); box-shadow:0 0 0 3px rgba(22,50,79,.10);
+  }
+  label.chk{display:flex;align-items:center;gap:8px;font-size:13.5px;color:var(--ink);font-weight:600;cursor:pointer;}
+  label.chk input{accent-color:var(--navy);}
+  input[type=file]{
+    padding:10px;border:1px solid var(--border-dash);border-radius:8px;background:#FAFBFC;font-size:13.5px;flex:1;min-width:220px;
+    color:var(--ink-soft);
+  }
+  .pill{
+    display:inline-block;
+    background:var(--pill-bg);
+    color:var(--pill-text);
+    font-size:12px;
+    padding:5px 14px;
+    border-radius:999px;
+  }
+  .file-btn{
+    display:inline-block;
+    background:var(--navy);color:#fff;border:none;border-radius:9px;
+    padding:10px 22px;font-size:14px;font-family:var(--font);font-weight:700;cursor:pointer;
+  }
+  .file-btn:hover{background:var(--navy-dark);}
+  button{
+    background:var(--navy);color:#fff;border:none;border-radius:9px;
+    padding:10px 22px;font-size:14px;font-family:var(--font);font-weight:700;cursor:pointer;
+  }
+  button:hover:not(:disabled){background:var(--navy-dark);}
+  button:disabled{background:#C7CDD6;cursor:not-allowed;}
+  button.secondary{background:#8C97A6;}
+  button.secondary:hover:not(:disabled){background:#76818F;}
+  #printBtn{background:#C0392B;}
+  #printBtn:hover:not(:disabled){background:#A5301F;}
+  .status{font-size:14px;color:#C0392B;font-weight:700;margin-top:2px;text-align:center;}
+  .status.err{color:var(--danger);}
+
+  .toolbar{
+    display:flex;gap:12px;flex-wrap:wrap;justify-content:center;
+    background:var(--surface);
+    border:1.5px dashed var(--border-dash);
+    border-radius:14px;
+    padding:18px 20px;
+  }
+
+  .preview-tray{
+    margin-top:6px;
+    padding:26px 18px;
+    background:var(--surface);
+    border:1.5px dashed var(--border-dash);
+    border-radius:14px;
+  }
+
+  .select-bar{
+    display:flex;
+    gap:10px;
+    align-items:center;
+    justify-content:center;
+    flex-wrap:wrap;
+    margin-bottom:16px;
+  }
+  .select-bar .pill{font-size:12px; font-weight:700;}
+
+  .tag .select-box{
+    position:absolute;
+    top:1mm;
+    left:1mm;
+    width:14px;
+    height:14px;
+    accent-color:var(--navy);
+    cursor:pointer;
+    z-index:5;
+  }
+  .tag .quick-print{
+    position:absolute;
+    top:1mm;
+    right:1mm;
+    width:18px;
+    height:18px;
+    padding:0;
+    font-size:10px;
+    line-height:1;
+    border-radius:4px;
+    background:var(--navy);
+    color:#fff;
+    border:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    z-index:5;
+  }
+  .tag .quick-print:hover{background:var(--navy-dark);}
+
+  #sheet{
+    display:flex;
+    flex-wrap:wrap;
+    gap: var(--gap);
+    justify-content:center;
+    margin:0 auto;
+  }
+
+  #sheet.receipt-mode{
+    flex-direction:column;
+    align-items:center;
+  }
+
+  .tag{
+    width:var(--tag-w);
+    height:var(--tag-h);
+    background:#fff;
+    border-radius:2px;
+    box-shadow:0 1px 3px rgba(22,50,79,.15), 0 0 0 1px rgba(22,50,79,.06);
+    display:flex;
+    flex-direction:column;
+    align-items:var(--tag-align-items, center);
+    justify-content:center;
+    text-align:var(--tag-align, center);
+    padding:2mm;
+    overflow:hidden;
+    position:relative;
+    font-size: var(--tag-font-size, 13px);
+    font-weight: var(--tag-bold, bold);
+    text-decoration: var(--tag-underline, none);
+    font-family: var(--tag-font-family, "Tahoma");
+  }
+  .tag .name{
+    font-family:var(--font);
+    font-size:0.96em;
+    line-height:1.25;
+    max-height:2.6em;
+    overflow:hidden;
+    color:#111;
+  }
+  .tag .code{
+    font-size:0.83em;
+    color:#222;
+    margin-top:1mm;
+  }
+  .tag .price{
+    font-size:1.6em;
+    margin-top:1.2mm;
+    letter-spacing:.5px;
+    color:#000;
+    text-decoration:underline;
+  }
+  .tag .price .cur{font-size:0.68em;font-weight:700;margin-left:3px;margin-right:4px;}
+  .tag .taxnote{
+    font-size:0.67em;
+    color:#333;
+    margin-top:1mm;
+  }
+  .tag .serial{
+    position:absolute;
+    bottom:1.2mm;
+    right:2mm;
+    font-size:0.67em;
+    color:#333;
+  }
+
+  @media print{
+    body{background:#fff;padding:0;margin:0;}
+    .masthead, .panel, .no-print{display:none !important;}
+    .select-bar, .tag .select-box, .tag .quick-print{display:none !important;}
+    .tag.unselected{display:none !important;}
+    .wrap{padding:0; max-width:none;}
+    .preview-tray{background:none;border:none;padding:0;border-radius:0;}
+    #sheet{gap:0mm; max-width:none;}
+    #sheet.receipt-mode{display:block;}
+    .tag{page-break-inside:avoid; box-shadow:none;}
+    #sheet.receipt-mode .tag{
+      page-break-after: always;
+      break-after: page;
+      margin:0 auto;
+    }
+    #sheet.receipt-mode .tag:last-child{
+      page-break-after: auto;
+    }
+    @page{margin:5mm;}
+  }
+</style>
+</head>
+<body>
+
+<header class="masthead no-print">
+  <h1>🏷️ طباعة بطاقات التسعير</h1>
+  <p class="sub">ارفع ملف الإكسيل أو أدخل صنف يدويًا، والأداة تولّد بطاقات تسعير بنفس شكل وأبعاد نموذج الطباعة</p>
+  <p class="attribution">د. يحي زقزوق — صيدلية معاذ</p>
+</header>
+
+<div class="wrap">
+<div class="panel no-print">
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">📄</div>
+      <p class="card-title">ملف الأصناف</p>
+      <p class="card-desc">يحتوي على: <b>صنف، أسم الصنف، كمية، وحدات، س.بيع</b></p>
+    </div>
+    <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
+      <span class="pill" id="fileStatusPill">لم يُرفع بعد</span>
+      <label for="fileInput" class="file-btn">اختر الملف</label>
+      <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;">
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-head">
+      <div class="card-icon">📐</div>
+      <p class="card-title">أبعاد البطاقة والضريبة</p>
+    </div>
+    <div class="row">
+      <div class="field">
+        <span>عرض البطاقة (مم)</span>
+        <input type="number" id="tagW" value="70" min="20" max="200">
+      </div>
+      <div class="field">
+        <span>ارتفاع البطاقة (مم)</span>
+        <input type="number" id="tagH" value="35" min="15" max="150">
+      </div>
+      <div class="field">
+        <span>المسافة بين البطاقات (مم)</span>
+        <input type="number" id="tagGap" value="3" min="0" max="20">
+      </div>
+      <div class="field">
+        <span>نسبة الضريبة %</span>
+        <input type="number" id="vatRate" value="15" min="0" max="100">
+      </div>
+      <div class="field">
+        <label class="chk"><input type="checkbox" id="vatIncluded"> السعر في الإكسيل شامل الضريبة أصلاً</label>
+      </div>
+      <div class="field">
+        <span>نوع الخط</span>
+        <select id="fontFamily">
+          <option value="Tahoma" selected>Tahoma</option>
+          <option value="Tajawal">Tajawal</option>
+          <option value="Cairo">Cairo</option>
+          <option value="Almarai">Almarai</option>
+          <option value="Segoe UI">Segoe UI</option>
+          <option value="Arial">Arial</option>
+          <option value="Times New Roman">Times New Roman</option>
+        </select>
+      </div>
+      <div class="field">
+        <span>حجم الخط</span>
+        <select id="fontSize">
+          <option value="9">9</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="13" selected>13</option>
+          <option value="14">14</option>
+          <option value="15">15</option>
+          <option value="16">16</option>
+          <option value="18">18</option>
+          <option value="20">20</option>
+          <option value="22">22</option>
+        </select>
+      </div>
+      <div class="field">
+        <span>نمط الخط</span>
+        <div style="display:flex;gap:12px;align-items:center;padding-top:2px;">
+          <label class="chk"><input type="checkbox" id="fontBold" checked> غامق</label>
+          <label class="chk"><input type="checkbox" id="fontUnderline"> تحته خط</label>
+        </div>
+      </div>
+      <div class="field">
+        <span>محاذاة النص</span>
+        <select id="fontAlign">
+          <option value="center" selected>وسط</option>
+          <option value="right">يمين</option>
+          <option value="left">يسار</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="display:none;">
+    <div class="card-head">
+      <div class="card-icon">🖨️</div>
+      <p class="card-title">طابعة الفواتير الحرارية</p>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label class="chk"><input type="checkbox" id="receiptMode" checked> طباعة كرت في كل صفحة (تقطع بعد كل كرت)</label>
+      </div>
+      <div class="field" id="rollWidthField">
+        <span>عرض رول الورق</span>
+        <select id="rollWidth">
+          <option value="58" selected>58 مم</option>
+          <option value="80">80 مم</option>
+        </select>
+      </div>
+    </div>
+    <div class="status" id="receiptNote" style="display:none; margin-top:12px;">
+      ملحوظة: تقطيع الورق تلقائيًا بعد كل كرت بيتحكم فيه إعداد الطابعة نفسها مش المتصفح.
+      افتح خصائص طابعة EPSON TM-T20III في ويندوز، وفي إعدادات الورق/القطع (Cut) اختار "قطع بعد كل صفحة / Auto Cut after each page"، وتأكد إن حجم الورق متظبط على نفس عرض الرول ("58mm Receipt" مثلاً)، عشان كل كرت يتطبع كصفحة منفصلة ويتقطع بعدها.
+    </div>
+  </div>
+
+  <div class="card" style="grid-column:1 / -1;">
+    <div class="card-head">
+      <div class="card-icon">✍️</div>
+      <p class="card-title">إدخال صنف يدوي</p>
+    </div>
+    <div class="row">
+      <div class="field">
+        <span>الكود</span>
+        <input type="text" id="manCode" style="width:120px;" placeholder="00012959">
+      </div>
+      <div class="field">
+        <span>اسم الصنف</span>
+        <input type="text" id="manName" style="width:220px;" placeholder="مثال: سيريلاك قمح وعسل 1 كجم">
+      </div>
+      <div class="field">
+        <span>السعر النهائي (شامل الضريبة)</span>
+        <input type="number" id="manPrice" step="0.01" style="width:110px;" placeholder="70.26">
+      </div>
+      <button id="addManualBtn" type="button">إضافة للطباعة</button>
+      <button id="clearAllBtn" type="button" class="secondary">امسح كل الأصناف</button>
+    </div>
+  </div>
+
+  <div class="toolbar">
+    <button id="renderBtn" disabled>عرض البطاقات</button>
+    <button id="printBtn" class="secondary" disabled>طباعة</button>
+  </div>
+  <div class="status" id="status">لم يتم رفع ملف بعد.</div>
+</div>
+
+<div class="preview-tray">
+  <div class="select-bar no-print" id="selectBar" style="display:none;">
+    <button type="button" id="selectAllBtn">تحديد الكل</button>
+    <button type="button" id="selectNoneBtn" class="secondary">إلغاء التحديد</button>
+    <span class="pill" id="selectedCount">0 / 0</span>
+  </div>
+  <div id="sheet"></div>
+</div>
+</div>
+
+<script>
+const fileInput = document.getElementById('fileInput');
+const renderBtn = document.getElementById('renderBtn');
+const printBtn  = document.getElementById('printBtn');
+const statusEl  = document.getElementById('status');
+const sheetEl   = document.getElementById('sheet');
+const tagW = document.getElementById('tagW');
+const tagH = document.getElementById('tagH');
+const tagGap = document.getElementById('tagGap');
+const vatRate = document.getElementById('vatRate');
+const vatIncluded = document.getElementById('vatIncluded');
+const fontSizeSel = document.getElementById('fontSize');
+const fontFamilySel = document.getElementById('fontFamily');
+const fontBold = document.getElementById('fontBold');
+const fontUnderline = document.getElementById('fontUnderline');
+const fontAlign = document.getElementById('fontAlign');
+const receiptMode = document.getElementById('receiptMode');
+const rollWidthField = document.getElementById('rollWidthField');
+const rollWidth = document.getElementById('rollWidth');
+const receiptNote = document.getElementById('receiptNote');
+const manName = document.getElementById('manName');
+const manCode = document.getElementById('manCode');
+const manPrice = document.getElementById('manPrice');
+const addManualBtn = document.getElementById('addManualBtn');
+const clearAllBtn = document.getElementById('clearAllBtn');
+const fileStatusPill = document.getElementById('fileStatusPill');
+const selectBar = document.getElementById('selectBar');
+const selectAllBtn = document.getElementById('selectAllBtn');
+const selectNoneBtn = document.getElementById('selectNoneBtn');
+const selectedCount = document.getElementById('selectedCount');
+const pageStyleTag = document.createElement('style');
+document.head.appendChild(pageStyleTag);
+
+let rows = [];
+
+// Flexible header matching: strip spaces/diacritics-ish and compare
+function normalize(h){
+  return String(h||'').replace(/\s+/g,'').replace(/[ًٌٍَُِّْـ]/g,'').trim();
+}
+
+const HEADER_MAP = {
+  code: ['صنف','كودالصنف','كود'],
+  name: ['أسمالصنف','اسمالصنف','اسمالمنتج','أسمالمنتج'],
+  qty:  ['كمية','الكمية'],
+  unit: ['وحدات','الوحدة','وحدة'],
+  price:['س.بيع','سعربيع','سعرالبيع','سعر']
+};
+
+function mapRow(rawRow, headerIndex){
+  const out = {};
+  for(const key in HEADER_MAP){
+    const idx = headerIndex[key];
+    out[key] = (idx !== undefined) ? rawRow[idx] : '';
+  }
+  return out;
+}
+
+fileInput.addEventListener('change', (e)=>{
+  const file = e.target.files[0];
+  if(!file) return;
+  fileStatusPill.textContent = file.name;
+  statusEl.className = 'status';
+  statusEl.textContent = 'جاري القراءة...';
+  const reader = new FileReader();
+  reader.onload = (ev)=>{
+    try{
+      const data = new Uint8Array(ev.target.result);
+      const wb = XLSX.read(data, {type:'array'});
+      const wsName = wb.SheetNames[0];
+      const ws = wb.Sheets[wsName];
+      const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
+      if(!aoa.length){ throw new Error('الملف فارغ'); }
+
+      const headers = aoa[0].map(normalize);
+      const headerIndex = {};
+      for(const key in HEADER_MAP){
+        const candidates = HEADER_MAP[key].map(normalize);
+        let foundIdx = headers.findIndex(h => candidates.includes(h));
+        if(foundIdx === -1){
+          // fallback: partial contains match
+          foundIdx = headers.findIndex(h => candidates.some(c => h.includes(c) || c.includes(h)));
+        }
+        if(foundIdx !== -1) headerIndex[key] = foundIdx;
+      }
+
+      if(headerIndex.name === undefined || headerIndex.price === undefined){
+        throw new Error('لم يتم العثور على أعمدة "أسم الصنف" و "س.بيع" في الملف. تأكد من أسماء الأعمدة في الصف الأول.');
+      }
+
+      rows = aoa.slice(1)
+        .map(r => mapRow(r, headerIndex))
+        .filter(r => String(r.name||'').trim() !== '');
+
+      statusEl.textContent = `تم تحميل ${rows.length} صنف بنجاح. اضغط "عرض البطاقات".`;
+      renderBtn.disabled = false;
+    }catch(err){
+      statusEl.className = 'status err';
+      statusEl.textContent = 'خطأ في قراءة الملف: ' + err.message;
+      rows = [];
+      renderBtn.disabled = true;
+    }
+  };
+  reader.readAsArrayBuffer(file);
+});
+
+function fmtPrice(v){
+  const n = parseFloat(v);
+  if(isNaN(n)) return '0.00';
+  return n.toFixed(2);
+}
+
+function computeDisplayPrice(r){
+  const base = parseFloat(r.price) || 0;
+  if(r.taxFinal) return base;
+  if(vatIncluded.checked) return base;
+  const rate = (parseFloat(vatRate.value)||0)/100;
+  return base * (1+rate);
+}
+
+function applyTextStyle(){
+  document.documentElement.style.setProperty('--tag-font-size', fontSizeSel.value+'px');
+  document.documentElement.style.setProperty('--tag-font-family', '"'+fontFamilySel.value+'"');
+  document.documentElement.style.setProperty('--tag-bold', fontBold.checked ? 'bold' : 'normal');
+  document.documentElement.style.setProperty('--tag-underline', fontUnderline.checked ? 'underline' : 'none');
+  const alignMap = {
+    center:{ align:'center', items:'center' },
+    right: { align:'right',  items:'flex-start' },
+    left:  { align:'left',   items:'flex-end' }
+  };
+  const m = alignMap[fontAlign.value];
+  document.documentElement.style.setProperty('--tag-align', m.align);
+  document.documentElement.style.setProperty('--tag-align-items', m.items);
+}
+
+function render(){
+  const isReceipt = receiptMode.checked;
+  const effectiveWidth = isReceipt ? parseFloat(rollWidth.value) : parseFloat(tagW.value);
+
+  document.documentElement.style.setProperty('--tag-w', effectiveWidth+'mm');
+  document.documentElement.style.setProperty('--tag-h', tagH.value+'mm');
+  document.documentElement.style.setProperty('--gap', tagGap.value+'mm');
+  applyTextStyle();
+
+  sheetEl.classList.toggle('receipt-mode', isReceipt);
+  receiptNote.style.display = isReceipt ? 'block' : 'none';
+
+  pageStyleTag.textContent = isReceipt
+    ? `@media print{ @page{ size:${effectiveWidth}mm ${tagH.value}mm; margin:0; } }`
+    : `@media print{ @page{ margin:5mm; } }`;
+
+  sheetEl.innerHTML = '';
+  rows.forEach((r)=>{
+    const price = computeDisplayPrice(r);
+    const codeText = r.code ? `(${r.code})` : '';
+
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `
+      <div class="name">${escapeHtml(r.name)}</div>
+      <div class="code">${escapeHtml(codeText)}</div>
+      <div class="price"><span class="cur">SR</span>${fmtPrice(price)}</div>
+      <div class="taxnote">السعر شامل الضريبة</div>
+    `;
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'select-box';
+    cb.checked = true;
+    cb.addEventListener('change', ()=>{
+      tag.classList.toggle('unselected', !cb.checked);
+      updateSelectCount();
+    });
+    tag.insertBefore(cb, tag.firstChild);
+
+    const qp = document.createElement('button');
+    qp.type = 'button';
+    qp.className = 'quick-print';
+    qp.title = 'طباعة هذه البطاقة فقط';
+    qp.textContent = '🖨️';
+    qp.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      printSingle(tag);
+    });
+    tag.appendChild(qp);
+
+    sheetEl.appendChild(tag);
+  });
+
+  selectBar.style.display = rows.length ? 'flex' : 'none';
+  updateSelectCount();
+  printBtn.disabled = rows.length === 0;
+}
+
+function printSingle(tag){
+  const all = Array.from(sheetEl.querySelectorAll('.tag'));
+  all.forEach(t => t.classList.add('unselected'));
+  tag.classList.remove('unselected');
+  window.print();
+  all.forEach(t => t.classList.remove('unselected'));
+}
+
+function updateSelectCount(){
+  const boxes = sheetEl.querySelectorAll('.select-box');
+  const checked = sheetEl.querySelectorAll('.select-box:checked').length;
+  selectedCount.textContent = `${checked} / ${boxes.length} محدد`;
+  if(printBtn) printBtn.disabled = checked === 0;
+}
+
+selectAllBtn.addEventListener('click', ()=>{
+  sheetEl.querySelectorAll('.select-box').forEach(cb=>{
+    cb.checked = true;
+    cb.closest('.tag').classList.remove('unselected');
+  });
+  updateSelectCount();
+});
+selectNoneBtn.addEventListener('click', ()=>{
+  sheetEl.querySelectorAll('.select-box').forEach(cb=>{
+    cb.checked = false;
+    cb.closest('.tag').classList.add('unselected');
+  });
+  updateSelectCount();
+});
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, m => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  }[m]));
+}
+
+renderBtn.addEventListener('click', render);
+printBtn.addEventListener('click', ()=>window.print());
+addManualBtn.addEventListener('click', ()=>{
+  const name = manName.value.trim();
+  const price = manPrice.value;
+  if(!name){ manName.focus(); return; }
+  if(price === '' || isNaN(parseFloat(price))){ manPrice.focus(); return; }
+  rows.push({ name, code: manCode.value.trim(), price, taxFinal:true });
+  manName.value = ''; manCode.value=''; manPrice.value='';
+  manName.focus();
+  statusEl.className = 'status';
+  statusEl.textContent = `عدد الأصناف الحالي: ${rows.length}. اضغط "عرض البطاقات".`;
+  renderBtn.disabled = false;
+  render();
+});
+clearAllBtn.addEventListener('click', ()=>{
+  rows = [];
+  sheetEl.innerHTML = '';
+  selectBar.style.display = 'none';
+  printBtn.disabled = true;
+  renderBtn.disabled = true;
+  statusEl.className = 'status';
+  statusEl.textContent = 'تم مسح كل الأصناف.';
+});
+receiptMode.addEventListener('change', ()=>{
+  rollWidthField.style.display = receiptMode.checked ? 'flex' : 'none';
+  if(rows.length) render();
+});
+[tagW,tagH,tagGap,vatRate,vatIncluded,rollWidth].forEach(el=>{
+  el.addEventListener('change', ()=>{ if(rows.length) render(); });
+});
+[fontSizeSel,fontFamilySel,fontBold,fontUnderline,fontAlign].forEach(el=>{
+  el.addEventListener('change', ()=>{
+    applyTextStyle();
+    if(rows.length && (el===fontAlign || el===fontSizeSel || el===fontFamilySel)) render();
+  });
+});
+</script>
+</body>
+</html>
