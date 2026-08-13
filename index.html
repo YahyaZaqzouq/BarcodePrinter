@@ -300,7 +300,7 @@
     <div class="card-head">
       <div class="card-icon">📄</div>
       <p class="card-title">ملف الأصناف</p>
-      <p class="card-desc">يحتوي على: <b>صنف، أسم الصنف، كمية، وحدات، س.بيع</b></p>
+      <p class="card-desc">يحتوي على: <b>مرجع داخلي، الاسم، العلامة التجارية، الحجم، سعر البيع</b> — أو الصيغة القديمة: صنف، أسم الصنف، كمية، وحدات، س.بيع</p>
     </div>
     <div style="display:flex;flex-direction:column;align-items:center;gap:10px;">
       <span class="pill" id="fileStatusPill">لم يُرفع بعد</span>
@@ -483,8 +483,8 @@ function normalize(h){
 }
 
 const HEADER_MAP = {
-  code: ['صنف','كودالصنف','كود'],
-  name: ['أسمالصنف','اسمالصنف','اسمالمنتج','أسمالمنتج'],
+  code: ['صنف','كودالصنف','كود','مرجعداخلي','مرجع'],
+  name: ['أسمالصنف','اسمالصنف','اسمالمنتج','أسمالمنتج','الاسم'],
   qty:  ['كمية','الكمية'],
   unit: ['وحدات','الوحدة','وحدة'],
   price:['س.بيع','سعربيع','سعرالبيع','سعر']
