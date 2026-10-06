@@ -140,6 +140,58 @@
   .status{font-size:14px;color:#C0392B;font-weight:700;margin-top:2px;text-align:center;}
   .status.err{color:var(--danger);}
 
+.combo{
+    position:relative;
+    width:260px;
+  }
+  .combo input{
+    width:100%;
+    padding:8px 10px;
+    border:1px solid var(--border-dash);
+    border-radius:8px;
+    font-size:13.5px;
+    font-family:var(--font);
+    color:var(--ink);
+    background:#FAFBFC;
+  }
+  .combo input:focus{
+    outline:none;
+    border-color:var(--navy);
+    box-shadow:0 0 0 3px rgba(22,50,79,.10);
+  }
+  .combo-list{
+    position:absolute;
+    top:calc(100% + 4px);
+    right:0;
+    left:0;
+    background:#fff;
+    border:1px solid var(--border-dash);
+    border-radius:8px;
+    box-shadow:0 6px 18px rgba(22,50,79,.16);
+    max-height:260px;
+    overflow-y:auto;
+    z-index:60;
+  }
+  .combo-list .opt{
+    padding:8px 12px;
+    font-size:13.5px;
+    color:var(--ink);
+    cursor:pointer;
+    border-bottom:1px solid #F1F5F9;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .combo-list .opt:last-child{border-bottom:none;}
+  .combo-list .opt:hover,
+  .combo-list .opt.hl{background:var(--pill-bg);}
+  .combo-list .opt small{color:var(--ink-soft); font-size:12px;}
+  .combo-list .empty{
+    padding:10px 12px;
+    color:var(--ink-soft);
+    font-size:13px;
+  }
+
   .toolbar{
     display:flex;gap:12px;flex-wrap:wrap;justify-content:center;
     background:var(--surface);
@@ -434,7 +486,10 @@
     </div>
     <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
       <span>المورد</span>
-      <select id="supFilter" style="width:240px;"><option value="">كل الموردين</option></select>
+      <div class="combo" id="supCombo">
+        <input type="text" id="supSearch" placeholder="اكتب اسم المورد…" autocomplete="off">
+        <div class="combo-list" id="supList" hidden></div>
+      </div>
     </div>
   </div>
   <div class="status" id="status" style="grid-column:1 / -1;">لم يتم رفع ملف بعد.</div>
@@ -38826,11 +38881,15 @@ const selectAllBtn = document.getElementById('selectAllBtn');
 const selectNoneBtn = document.getElementById('selectNoneBtn');
 const selectedCount = document.getElementById('selectedCount');
 const catFilter = document.getElementById('catFilter');
-const supFilter = document.getElementById('supFilter');
+const supSearch = document.getElementById('supSearch');
+const supList = document.getElementById('supList');
 const pageStyleTag = document.createElement('style');
 document.head.appendChild(pageStyleTag);
 
 let rows = [];
+let suppliers = [];
+let supplierSel = '';
+let supHl = -1;
 
 // populate category filter dropdown
 catFilter.innerHTML = '<option value="">كل الفئات</option>' + CATEGORY_LIST.map(c =>
@@ -38844,7 +38903,7 @@ function categoryOf(r){
 
 function filteredRows(){
   const cat = catFilter.value;
-  const sup = supFilter.value;
+  const sup = supplierSel;
   return rows.filter(r =>
     (!cat || categoryOf(r) === cat) &&
     (!sup || String(r.supplier||'').trim() === sup)
@@ -38960,11 +39019,81 @@ function populateSuppliers(){
     if(s && !seen.includes(s)) seen.push(s);
   }
   seen.sort((a,b)=>a.localeCompare(b,'ar'));
-  const keep = supFilter.value;
-  supFilter.innerHTML = '<option value="">كل الموردين</option>' +
-    seen.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
-  if(seen.includes(keep)) supFilter.value = keep;
+  suppliers = seen;
+  supplierSel = '';
+  supSearch.value = '';
+  supList.innerHTML = '';
+  supList.hidden = true;
 }
+
+function supplierCountOf(name){
+  let n = 0;
+  for(const r of rows) if(String(r.supplier||'').trim() === name) n++;
+  return n;
+}
+
+function supMatches(){
+  const q = supSearch.value.trim().toLowerCase();
+  const hits = [];
+  for(const s of suppliers){
+    if(!q || s.toLowerCase().includes(q)) hits.push(s);
+    if(hits.length >= 60) break;
+  }
+  return hits;
+}
+
+function renderSupList(){
+  const hits = supMatches();
+  supHl = -1;
+  if(!hits.length){
+    supList.innerHTML = `<div class="empty">لا يوجد مورد بهذا الاسم</div>`;
+    supList.hidden = false;
+    return;
+  }
+  let html = '';
+  if(!supSearch.value.trim()) html += `<div class="opt" data-val="">كل الموردين</div>`;
+  for(const s of hits){
+    html += `<div class="opt" data-val="${escapeHtml(s)}">${escapeHtml(s)} <small>(${supplierCountOf(s)})</small></div>`;
+  }
+  supList.innerHTML = html;
+  supList.hidden = false;
+}
+
+function setSupplier(name){
+  supplierSel = name;
+  supSearch.value = name === '' ? '' : name;
+  supList.hidden = true;
+  if(rows.length) render();
+}
+
+supSearch.addEventListener('focus', ()=>{ if(suppliers.length) renderSupList(); });
+supSearch.addEventListener('input', ()=>{ if(suppliers.length) renderSupList(); });
+supSearch.addEventListener('keydown', (e)=>{
+  const opts = [...supList.querySelectorAll('.opt')];
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    if(supList.hidden) { renderSupList(); return; }
+    e.preventDefault();
+    supHl = (supHl + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % Math.max(opts.length,1);
+    opts.forEach((o,i)=>o.classList.toggle('hl', i === supHl));
+    if(opts[supHl]) opts[supHl].scrollIntoView({block:'nearest'});
+  }else if(e.key === 'Enter'){
+    if(!supList.hidden && supHl >= 0 && opts[supHl]){
+      e.preventDefault();
+      setSupplier(opts[supHl].dataset.val);
+    }
+  }else if(e.key === 'Escape'){
+    supList.hidden = true;
+  }
+});
+supList.addEventListener('mousedown', (e)=>{
+  const opt = e.target.closest('.opt');
+  if(!opt) return;
+  e.preventDefault();
+  setSupplier(opt.dataset.val);
+});
+document.addEventListener('click', (e)=>{
+  if(!e.target.closest('#supCombo')) supList.hidden = true;
+});
 
 function fmtPrice(v){
   const n = parseFloat(v);
@@ -39055,7 +39184,7 @@ function render(){
   printBtn.disabled = list.length === 0;
   const parts = [];
   if(catFilter.value) parts.push(`فئة "${catFilter.value}"`);
-  if(supFilter.value) parts.push(`مورد "${supFilter.value}"`);
+  if(supplierSel) parts.push(`مورد "${supplierSel}"`);
   if(parts.length){
     statusEl.className = 'status';
     statusEl.textContent = `${parts.join(' + ')}: ${list.length} صنف معروض.`;
@@ -39103,7 +39232,6 @@ function escapeHtml(s){
 
 renderBtn.addEventListener('click', render);
 catFilter.addEventListener('change', ()=>{ if(rows.length) render(); });
-supFilter.addEventListener('change', ()=>{ if(rows.length) render(); });
 printBtn.addEventListener('click', ()=>window.print());
 addManualBtn.addEventListener('click', ()=>{
   const name = manName.value.trim();
@@ -39122,7 +39250,11 @@ clearAllBtn.addEventListener('click', ()=>{
   rows = [];
   sheetEl.innerHTML = '';
   selectBar.style.display = 'none';
-  supFilter.innerHTML = '<option value="">كل الموردين</option>';
+  supSearch.value = '';
+  supList.innerHTML = '';
+  supList.hidden = true;
+  suppliers = [];
+  supplierSel = '';
   printBtn.disabled = true;
   renderBtn.disabled = true;
   statusEl.className = 'status';
