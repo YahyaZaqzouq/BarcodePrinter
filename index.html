@@ -430,7 +430,11 @@
     <button id="printBtn" class="secondary" disabled>طباعة</button>
     <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
       <span>فئة المنتج</span>
-      <select id="catFilter" style="width:220px;"></select>
+      <select id="catFilter" style="width:180px;"></select>
+    </div>
+    <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
+      <span>المورد</span>
+      <select id="supFilter" style="width:240px;"><option value="">كل الموردين</option></select>
     </div>
   </div>
   <div class="status" id="status" style="grid-column:1 / -1;">لم يتم رفع ملف بعد.</div>
@@ -38822,6 +38826,7 @@ const selectAllBtn = document.getElementById('selectAllBtn');
 const selectNoneBtn = document.getElementById('selectNoneBtn');
 const selectedCount = document.getElementById('selectedCount');
 const catFilter = document.getElementById('catFilter');
+const supFilter = document.getElementById('supFilter');
 const pageStyleTag = document.createElement('style');
 document.head.appendChild(pageStyleTag);
 
@@ -38834,13 +38839,16 @@ catFilter.innerHTML = '<option value="">كل الفئات</option>' + CATEGORY_L
 
 function categoryOf(r){
   const ref = fixRef(r.code);
-  return CATEGORY_MAP[ref] || '';
+  return CATEGORY_MAP[ref] || String(r.category||'').trim();
 }
 
 function filteredRows(){
-  const sel = catFilter.value;
-  if(!sel) return rows;
-  return rows.filter(r => categoryOf(r) === sel);
+  const cat = catFilter.value;
+  const sup = supFilter.value;
+  return rows.filter(r =>
+    (!cat || categoryOf(r) === cat) &&
+    (!sup || String(r.supplier||'').trim() === sup)
+  );
 }
 
 // Flexible header matching: strip spaces/diacritics-ish and compare (case-insensitive)
@@ -38849,12 +38857,14 @@ function normalize(h){
 }
 
 const HEADER_MAP = {
-  code: ['صنف','كودالصنف','كود','مرجعداخلي','مرجع','productref'],
+  code: ['صنف','كودالصنف','كود','مرجعداخلي','مرجع','productref','referencecode'],
   barcode: ['productbarcode','باركود','الباركود'],
-  name: ['أسمالصنف','اسمالصنف','اسمالمنتج','أسمالمنتج','الاسم','productname'],
-  qty:  ['كمية','الكمية'],
+  name: ['أسمالصنف','اسمالصنف','اسمالمنتج','أسمالمنتج','الاسم','productname','arabicname','product'],
+  qty:  ['كمية','الكمية','qty','quantity'],
   unit: ['وحدات','الوحدة','وحدة'],
-  price:['س.بيع','سعربيع','سعرالبيع','سعر','salesprice']
+  price:['س.بيع','سعربيع','سعرالبيع','سعر','salesprice','saleprice'],
+  supplier:['supplier','المورد','الوردية'],
+  category:['category','الفئة','القسم']
 };
 
 // Product Ref comes without leading "000" in the file; ensure it starts with 000
@@ -38873,6 +38883,37 @@ function mapRow(rawRow, headerIndex){
   return out;
 }
 
+// Exact header matches first, then loose matches — never reuse a column already taken
+function matchHeaders(row){
+  const headers = (row||[]).map(normalize);
+  const found = {};
+  const taken = new Set();
+  for(const key in HEADER_MAP){
+    const cands = HEADER_MAP[key].map(normalize);
+    let i = headers.findIndex(h => cands.includes(h));
+    if(i !== -1){ found[key] = i; taken.add(i); }
+  }
+  for(const key in HEADER_MAP){
+    if(found[key] !== undefined) continue;
+    const cands = HEADER_MAP[key].map(normalize);
+    let i = headers.findIndex((h, idx) => !taken.has(idx) && h && cands.some(c => h.includes(c) || c.includes(h)));
+    if(i !== -1){ found[key] = i; taken.add(i); }
+  }
+  return found;
+}
+
+// Reports have title/filter rows above the real headers — scan for the best header row
+function findHeaderRow(aoa){
+  const limit = Math.min(aoa.length, 40);
+  let best = { idx: -1, score: 0, map: {} };
+  for(let i=0; i<limit; i++){
+    const map = matchHeaders(aoa[i]);
+    const score = Object.keys(map).length;
+    if(score > best.score){ best = { idx: i, score, map }; }
+  }
+  return best;
+}
+
 fileInput.addEventListener('change', (e)=>{
   const file = e.target.files[0];
   if(!file) return;
@@ -38889,28 +38930,18 @@ fileInput.addEventListener('change', (e)=>{
       const aoa = XLSX.utils.sheet_to_json(ws, {header:1, raw:true, defval:''});
       if(!aoa.length){ throw new Error('الملف فارغ'); }
 
-      const headers = aoa[0].map(normalize);
-      const headerIndex = {};
-      for(const key in HEADER_MAP){
-        const candidates = HEADER_MAP[key].map(normalize);
-        let foundIdx = headers.findIndex(h => candidates.includes(h));
-        if(foundIdx === -1){
-          // fallback: partial contains match
-          foundIdx = headers.findIndex(h => candidates.some(c => h.includes(c) || c.includes(h)));
-        }
-        if(foundIdx !== -1) headerIndex[key] = foundIdx;
+      const hdr = findHeaderRow(aoa);
+      if(hdr.idx === -1 || hdr.map.name === undefined || hdr.map.price === undefined){
+        throw new Error('لم يتم العثور على أعمدة الاسم والسعر في الملف. تأكد من أسماء الأعمدة في صف العناوين.');
       }
 
-      if(headerIndex.name === undefined || headerIndex.price === undefined){
-        throw new Error('لم يتم العثور على أعمدة "أسم الصنف" و "س.بيع" في الملف. تأكد من أسماء الأعمدة في الصف الأول.');
-      }
-
-      rows = aoa.slice(1)
-        .map(r => mapRow(r, headerIndex))
+      rows = aoa.slice(hdr.idx + 1)
+        .map(r => mapRow(r, hdr.map))
         .filter(r => String(r.name||'').trim() !== '')
         .map(r => { r.code = fixRef(r.code); return r; });
 
-      statusEl.textContent = `تم تحميل ${rows.length} صنف بنجاح. اضغط "عرض البطاقات".`;
+      populateSuppliers();
+      statusEl.textContent = `تم تحميل ${rows.length} صنف بنجاح (العناوين في الصف ${hdr.idx + 1}). اضغط "عرض البطاقات".`;
       renderBtn.disabled = false;
     }catch(err){
       statusEl.className = 'status err';
@@ -38921,6 +38952,19 @@ fileInput.addEventListener('change', (e)=>{
   };
   reader.readAsArrayBuffer(file);
 });
+
+function populateSuppliers(){
+  const seen = [];
+  for(const r of rows){
+    const s = String(r.supplier||'').trim();
+    if(s && !seen.includes(s)) seen.push(s);
+  }
+  seen.sort((a,b)=>a.localeCompare(b,'ar'));
+  const keep = supFilter.value;
+  supFilter.innerHTML = '<option value="">كل الموردين</option>' +
+    seen.map(s=>`<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join('');
+  if(seen.includes(keep)) supFilter.value = keep;
+}
 
 function fmtPrice(v){
   const n = parseFloat(v);
@@ -39009,9 +39053,15 @@ function render(){
   selectBar.style.display = list.length ? 'flex' : 'none';
   updateSelectCount();
   printBtn.disabled = list.length === 0;
-  if(catFilter.value){
+  const parts = [];
+  if(catFilter.value) parts.push(`فئة "${catFilter.value}"`);
+  if(supFilter.value) parts.push(`مورد "${supFilter.value}"`);
+  if(parts.length){
     statusEl.className = 'status';
-    statusEl.textContent = `فئة "${catFilter.value}": ${list.length} صنف معروض.`;
+    statusEl.textContent = `${parts.join(' + ')}: ${list.length} صنف معروض.`;
+  }else if(list.length === 0){
+    statusEl.className = 'status err';
+    statusEl.textContent = 'لا توجد أصناف مطابقة للفلتر المختار.';
   }
 }
 
@@ -39053,6 +39103,7 @@ function escapeHtml(s){
 
 renderBtn.addEventListener('click', render);
 catFilter.addEventListener('change', ()=>{ if(rows.length) render(); });
+supFilter.addEventListener('change', ()=>{ if(rows.length) render(); });
 printBtn.addEventListener('click', ()=>window.print());
 addManualBtn.addEventListener('click', ()=>{
   const name = manName.value.trim();
@@ -39071,6 +39122,7 @@ clearAllBtn.addEventListener('click', ()=>{
   rows = [];
   sheetEl.innerHTML = '';
   selectBar.style.display = 'none';
+  supFilter.innerHTML = '<option value="">كل الموردين</option>';
   printBtn.disabled = true;
   renderBtn.disabled = true;
   statusEl.className = 'status';
