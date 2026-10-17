@@ -481,6 +481,11 @@
     <button id="renderBtn" disabled>عرض البطاقات</button>
     <button id="printBtn" class="secondary" disabled>طباعة</button>
     <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
+      <span>مسح الباركود</span>
+      <input type="text" id="barcodeSearch" style="width:190px;" placeholder="امسح أو اكتب الكود ثم Enter" autocomplete="off">
+      <button type="button" id="scanBtn" class="secondary">عرض الاستيكر</button>
+    </div>
+    <div class="field" style="flex-direction:row; align-items:center; gap:8px;">
       <span>فئة المنتج</span>
       <select id="catFilter" style="width:180px;"></select>
     </div>
@@ -38881,6 +38886,8 @@ const selectAllBtn = document.getElementById('selectAllBtn');
 const selectNoneBtn = document.getElementById('selectNoneBtn');
 const selectedCount = document.getElementById('selectedCount');
 const catFilter = document.getElementById('catFilter');
+const barcodeSearch = document.getElementById('barcodeSearch');
+const scanBtn = document.getElementById('scanBtn');
 const supSearch = document.getElementById('supSearch');
 const supList = document.getElementById('supList');
 const pageStyleTag = document.createElement('style');
@@ -38890,6 +38897,25 @@ let rows = [];
 let suppliers = [];
 let supplierSel = '';
 let supHl = -1;
+let scanMode = { active:false, term:'' };
+
+// strip leading zeros so "00012959" matches "12959"
+function normCode(v){ return String(v||'').replace(/\s+/g,'').replace(/^0+/,''); }
+
+function matchesScan(r){
+  const t = scanMode.term;
+  if(!t) return true;
+  const bc = String(r.barcode||'').trim();
+  const cd = String(r.code||'').trim();
+  return bc === t || cd === t || (bc && normCode(bc) === normCode(t)) || (cd && normCode(cd) === normCode(t));
+}
+
+function runScan(){
+  const t = barcodeSearch.value.trim();
+  if(!t){ scanMode = { active:false, term:'' }; if(rows.length) render(); return; }
+  scanMode = { active:true, term:t };
+  render();
+}
 
 // populate category filter dropdown
 catFilter.innerHTML = '<option value="">كل الفئات</option>' + CATEGORY_LIST.map(c =>
@@ -38902,6 +38928,7 @@ function categoryOf(r){
 }
 
 function filteredRows(){
+  if(scanMode.active) return rows.filter(matchesScan);
   const cat = catFilter.value;
   const sup = supplierSel;
   return rows.filter(r =>
@@ -38976,6 +39003,7 @@ function findHeaderRow(aoa){
 fileInput.addEventListener('change', (e)=>{
   const file = e.target.files[0];
   if(!file) return;
+  autoLoadDone = true;
   fileStatusPill.textContent = file.name;
   statusEl.className = 'status';
   statusEl.textContent = 'جاري القراءة...';
@@ -39012,6 +39040,44 @@ fileInput.addEventListener('change', (e)=>{
   reader.readAsArrayBuffer(file);
 });
 
+// ---------- تحميل قائمة الأصناف تلقائيًا من inventory.js ----------
+let autoLoadDone = false;
+
+function applyInventory(payload){
+  rows = (payload.rows||[]).map(r => ({
+    code: r[0] || '',
+    name: r[1] || '',
+    price: r[2],
+    supplier: (payload.suppliers||[])[r[3]] || '',
+    category: (payload.categories||[])[r[4]] || '',
+    barcode: r[5] || '',
+    qty: '',
+    unit: ''
+  })).filter(r => String(r.name).trim() !== '');
+  populateSuppliers();
+  renderBtn.disabled = false;
+  statusEl.className = 'status';
+  statusEl.textContent = `قائمة الأصناف جاهزة: ${rows.length} صنف${payload.source ? ' (من ' + payload.source + ')' : ''}. امسح الباركود، أو اختر فلتر، أو اضغط "عرض البطاقات".`;
+  if(fileStatusPill) fileStatusPill.textContent = 'قائمة الأصناف الجاهزة';
+  if(barcodeSearch) barcodeSearch.focus();
+}
+
+function loadInventory(){
+  const s = document.createElement('script');
+  s.src = 'inventory.js';
+  s.onload = ()=>{
+    if(autoLoadDone) return;
+    autoLoadDone = true;
+    if(window.PRICE_TAG_INVENTORY) applyInventory(window.PRICE_TAG_INVENTORY);
+  };
+  s.onerror = ()=>{
+    if(autoLoadDone) return;
+    statusEl.className = 'status';
+    statusEl.textContent = 'مفيش ملف inventory.js — ارفع ملف الأصناف يدويًا من زر "اختيار ملف".';
+  };
+  document.head.appendChild(s);
+}
+
 function populateSuppliers(){
   const seen = [];
   for(const r of rows){
@@ -39021,6 +39087,8 @@ function populateSuppliers(){
   seen.sort((a,b)=>a.localeCompare(b,'ar'));
   suppliers = seen;
   supplierSel = '';
+  scanMode = { active:false, term:'' };
+  barcodeSearch.value = '';
   supSearch.value = '';
   supList.innerHTML = '';
   supList.hidden = true;
@@ -39063,6 +39131,8 @@ function setSupplier(name){
   supplierSel = name;
   supSearch.value = name === '' ? '' : name;
   supList.hidden = true;
+  scanMode = { active:false, term:'' };
+  barcodeSearch.value = '';
   if(rows.length) render();
 }
 
@@ -39183,11 +39253,14 @@ function render(){
   updateSelectCount();
   printBtn.disabled = list.length === 0;
   const parts = [];
+  if(scanMode.active) parts.push(`باركود "${scanMode.term}"`);
   if(catFilter.value) parts.push(`فئة "${catFilter.value}"`);
   if(supplierSel) parts.push(`مورد "${supplierSel}"`);
   if(parts.length){
-    statusEl.className = 'status';
-    statusEl.textContent = `${parts.join(' + ')}: ${list.length} صنف معروض.`;
+    statusEl.className = list.length ? 'status' : 'status err';
+    statusEl.textContent = list.length
+      ? `${parts.join(' + ')}: ${list.length} صنف معروض.`
+      : `${parts.join(' + ')}: لا يوجد صنف مطابق.`;
   }else if(list.length === 0){
     statusEl.className = 'status err';
     statusEl.textContent = 'لا توجد أصناف مطابقة للفلتر المختار.';
@@ -39230,8 +39303,18 @@ function escapeHtml(s){
   }[m]));
 }
 
-renderBtn.addEventListener('click', render);
-catFilter.addEventListener('change', ()=>{ if(rows.length) render(); });
+function exitScan(){
+  if(scanMode.active){ scanMode = { active:false, term:'' }; }
+  barcodeSearch.value = '';
+}
+
+renderBtn.addEventListener('click', ()=>{ exitScan(); render(); });
+catFilter.addEventListener('change', ()=>{ exitScan(); if(rows.length) render(); });
+scanBtn.addEventListener('click', runScan);
+barcodeSearch.addEventListener('keydown', (e)=>{
+  if(e.key === 'Enter'){ e.preventDefault(); runScan(); }
+  else if(e.key === 'Escape'){ exitScan(); if(rows.length) render(); }
+});
 printBtn.addEventListener('click', ()=>window.print());
 addManualBtn.addEventListener('click', ()=>{
   const name = manName.value.trim();
@@ -39255,6 +39338,8 @@ clearAllBtn.addEventListener('click', ()=>{
   supList.hidden = true;
   suppliers = [];
   supplierSel = '';
+  scanMode = { active:false, term:'' };
+  barcodeSearch.value = '';
   printBtn.disabled = true;
   renderBtn.disabled = true;
   statusEl.className = 'status';
@@ -39273,6 +39358,8 @@ receiptMode.addEventListener('change', ()=>{
     if(rows.length && (el===fontAlign || el===fontSizeSel || el===fontFamilySel)) render();
   });
 });
+
+loadInventory();
 </script>
 </body>
 </html>
